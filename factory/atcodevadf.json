@@ -1,0 +1,9 @@
+{
+	"name": "atcodevadf",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "0d9b6c16-1caf-4410-9527-b2d169a2b6fd",
+		"tenantId": "e4e34038-ea1f-4882-b6e8-ccd776459ca0"
+	}
+}

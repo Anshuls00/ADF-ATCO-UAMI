@@ -1,0 +1,132 @@
+name: ADF CI/CD - Dev/UAT/Prod
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install NPM Packages
+        run: npm install
+
+      - name: Validate ADF
+        run: |
+          npm run build validate ${{ github.workspace }} \
+            /subscriptions/737d1672-96a9-4ba4-b12c-8027ef27ab4e/resourceGroups/AnshulSinha-rg/providers/Microsoft.DataFactory/factories/atcodevadf
+
+      - name: Generate ARM Template
+        run: |
+          npm run build export ${{ github.workspace }} \
+            /subscriptions/737d1672-96a9-4ba4-b12c-8027ef27ab4e/resourceGroups/AnshulSinha-rg/providers/Microsoft.DataFactory/factories/atcodevadf \
+            "ArmTemplate"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArmTemplate-dev
+          path: ${{ github.workspace }}/ArmTemplate
+
+  dev-release:
+    needs: build
+    runs-on: self-hosted
+    environment: dev
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ArmTemplate-dev
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          auth-type: IDENTITY
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: 737d1672-96a9-4ba4-b12c-8027ef27ab4e
+          enable-AzPSSession: true
+
+      - name: Pre-Deployment Script
+        shell: pwsh
+        run: |
+          Write-Host "Running Pre-Deployment tasks..."
+          # Example: Disable triggers before deployment
+          # az datafactory trigger stop --factory-name atcodevadf --resource-group AnshulSinha-rg --name <triggerName>
+
+      - name: Deploy ADF
+        uses: Azure/arm-deploy@v2
+        with:
+          scope: resourcegroup
+          resourceGroupName: AnshulSinha-rg
+          template: ARMTemplateForFactory.json
+          deploymentMode: Incremental
+          parameters: factoryName=atcodevadf
+
+      - name: Post-Deployment Script
+        shell: pwsh
+        run: |
+          Write-Host "Running Post-Deployment tasks..."
+          # Example: Enable triggers after deployment
+          # az datafactory trigger start --factory-name atcodevadf --resource-group AnshulSinha-rg --name <triggerName>
+
+  # uat-release:
+  #   needs: build
+  #   runs-on: self-hosted
+  #   environment: uat
+  #   steps:
+  #     - name: Download Artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: ArmTemplate-dev
+  #
+  #     - name: Azure Login
+  #       uses: azure/login@v2
+  #       with:
+  #         auth-type: IDENTITY
+  #         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  #         subscription-id: 737d1672-96a9-4ba4-b12c-8027ef27ab4e
+  #         enable-AzPSSession: true
+  #
+  #     - name: Deploy ADF to UAT
+  #       uses: Azure/arm-deploy@v2
+  #       with:
+  #         scope: resourcegroup
+  #         resourceGroupName: <UAT-RG-NAME>
+  #         template: ARMTemplateForFactory.json
+  #         deploymentMode: Incremental
+  #         parameters: factoryName=<UAT-ADF-NAME>
+  #
+  # prod-release:
+  #   needs: build
+  #   runs-on: self-hosted
+  #   environment: prod
+  #   steps:
+  #     - name: Download Artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: ArmTemplate-dev
+  #
+  #     - name: Azure Login
+  #       uses: azure/login@v2
+  #       with:
+  #         auth-type: IDENTITY
+  #         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  #         subscription-id: 737d1672-96a9-4ba4-b12c-8027ef27ab4e
+  #         enable-AzPSSession: true
+  #
+  #     - name: Deploy ADF to Prod
+  #       uses: Azure/arm-deploy@v2
+  #       with:
+  #         scope: resourcegroup
+  #         resourceGroupName: <PROD-RG-NAME>
+  #         template: ARMTemplateForFactory.json
+  #         deploymentMode: Incremental
+  #         parameters: factoryName=<PROD-ADF-NAME>
